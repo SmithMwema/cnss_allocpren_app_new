@@ -1,0 +1,107 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:fl_chart/fl_chart.dart';
+import '../../../controleur/admin_dashboard_ctrl.dart';
+
+class PageAdminDashboard extends StatelessWidget {
+  const PageAdminDashboard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final AdminDashboardCtrl ctrl = Get.find<AdminDashboardCtrl>();
+
+    return Scaffold(
+      body: RefreshIndicator(
+        onRefresh: ctrl.chargerToutesLesDonnees,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            // CrossAxisAlignment.start est bien ici
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Statistiques des Utilisateurs", style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              
+              // On appelle bien la méthode _buildKpiGrid
+              _buildKpiGrid(ctrl),
+              
+              const SizedBox(height: 24),
+              Text("Répartition des Rôles", style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              
+              SizedBox(
+                height: 300,
+                child: Obx(() {
+                  if (ctrl.isLoading.value) return const Center(child: CircularProgressIndicator());
+                  if (ctrl.userStatsData.isEmpty) return const Center(child: Text("Aucun utilisateur à analyser."));
+                  
+                  return BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      barGroups: ctrl.userStatsData.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final data = entry.value;
+                        return BarChartGroupData(
+                          x: index,
+                          barRods: [BarChartRodData(toY: data.nombre.toDouble(), color: data.couleur)],
+                        );
+                      }).toList(),
+                      titlesData: FlTitlesData(
+                        bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (value, meta) {
+                          return SideTitleWidget(axisSide: meta.axisSide, child: Text(ctrl.userStatsData[value.toInt()].role));
+                        }, reservedSize: 20)),
+                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildKpiGrid(AdminDashboardCtrl ctrl) {
+    return Obx(() => GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 16,
+      mainAxisSpacing: 16,
+      childAspectRatio: 2.5 / 1,
+      children: [
+        _buildKpiCard("Utilisateurs Total", ctrl.totalUtilisateurs.value.toString(), Icons.people, Colors.blue),
+        _buildKpiCard("Bénéficiaires", ctrl.totalBeneficiaires.value.toString(), Icons.woman, Colors.pink),
+      ],
+    ));
+  }
+
+  Widget _buildKpiCard(String titre, String valeur, IconData icone, Color couleur) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          children: [
+            Icon(icone, size: 32, color: couleur),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(valeur, style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold)),
+                Text(titre, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
