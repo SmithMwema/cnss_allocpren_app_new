@@ -1,24 +1,51 @@
-import 'dossier.dart';
+// lib/modele/listing.dart
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Listing {
-  final String id;
+  final String? id;
   final DateTime dateCreation;
-  final String creePar;
-  final String statut;
-  final List<Dossier> dossiers;
+  final String creeParId; // L'ID du directeur qui a créé le listing
+  
+  // --- LA PROPRIÉTÉ CLÉ, AVEC LE BON NOM ---
+  // C'est cette ligne qui va corriger les erreurs dans vos deux vues.
+  final List<String> dossierIds; 
+  
+  String statut; // Ex: 'Généré', 'Payé'
 
   Listing({
-    required this.id,
+    this.id,
     required this.dateCreation,
-    required this.creePar,
-    required this.statut,
-    required this.dossiers,
+    required this.creeParId,
+    required this.dossierIds, // Le nom est maintenant correct
+    this.statut = 'Généré',
   });
 
-  // --- CORRECTION ---
-  // On commente cette ligne pour l'instant, car le modèle 'Dossier'
-  // n'a pas encore de champ 'montantAPayer'.
-  // double get montantTotal {
-  //   return dossiers.fold(0.0, (sum, item) => sum + item.montantAPayer);
-  // }
+  /// Méthode pour convertir l'objet Listing en un format compatible avec Firestore.
+  Map<String, dynamic> toFirestore() {
+    return {
+      'dateCreation': Timestamp.fromDate(dateCreation),
+      'creeParId': creeParId,
+      'dossierIds': dossierIds, // Le nom est maintenant correct
+      'statut': statut,
+    };
+  }
+
+  /// Factory constructor pour créer une instance de Listing à partir d'un document Firestore.
+  factory Listing.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
+    
+    if (data == null) {
+      throw StateError("Données manquantes dans le document Firestore: ${doc.id}");
+    }
+
+    return Listing(
+      id: doc.id,
+      dateCreation: (data['dateCreation'] as Timestamp).toDate(),
+      creeParId: data['creeParId'] ?? '',
+      // Le nom est maintenant correct
+      dossierIds: List<String>.from(data['dossierIds'] ?? []), 
+      statut: data['statut'] ?? 'Généré',
+    );
+  }
 }

@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../modele/dossier.dart';
+import '../modele/listing.dart';
+import '../routes/app_pages.dart';
 import '../service/auth_service.dart';
 import '../service/firestore_service.dart';
 
@@ -14,85 +16,135 @@ class AgentDashboardCtrl extends GetxController {
   var isLoading = true.obs;
   final RxString emailUtilisateur = ''.obs;
 
-  // --- VARIABLES ET LOGIQUE POUR LA RECHERCHE ---
+  final dossiersATraiter = <Dossier>[].obs;
+  final dossiersPourListing = <Dossier>[].obs;
+  final dossiersSuivi = <Dossier>[].obs;
+  final historiqueListings = <Listing>[].obs;
+
   var isSearching = false.obs;
   var searchQuery = ''.obs;
   final TextEditingController searchController = TextEditingController();
 
-  // Listes originales contenant toutes les données de Firestore
-  final _dossiersATraiterSource = <Dossier>[].obs;
-  final _dossiersTraitesSource = <Dossier>[].obs;
+  var isProcessingListing = false.obs;
+  final RxList<Dossier> selectedForListing = <Dossier>[].obs;
 
-  // Getters pour les listes filtrées (celles affichées à l'écran)
-  List<Dossier> get filteredDossiersATraiter {
-    if (searchQuery.isEmpty) {
-      return _dossiersATraiterSource;
+  bool isSelected(Dossier dossier) => selectedForListing.contains(dossier);
+
+  List<dynamic> get listeFiltreeAffichee {
+    if (selectedIndex.value == 3) {
+      if(searchQuery.isEmpty) return historiqueListings;
+      return historiqueListings.where((l) => l.id!.contains(searchQuery.value)).toList();
     }
-    return _dossiersATraiterSource.where((dossier) {
+    List<Dossier> sourceList;
+    switch (selectedIndex.value) {
+      case 0: sourceList = dossiersATraiter; break;
+      case 1: sourceList = dossiersPourListing; break;
+      case 2: sourceList = dossiersSuivi; break;
+      default: sourceList = [];
+    }
+    if (searchQuery.isEmpty) return sourceList;
+    return sourceList.where((dossier) {
       final nomComplet = "${dossier.prenomAssure} ${dossier.nomAssure}".toLowerCase();
       final numSecu = dossier.numSecuAssure.toLowerCase();
       final query = searchQuery.value.toLowerCase();
       return nomComplet.contains(query) || numSecu.contains(query);
     }).toList();
   }
-
-  List<Dossier> get filteredDossiersTraites {
-    if (searchQuery.isEmpty) {
-      return _dossiersTraitesSource;
-    }
-    return _dossiersTraitesSource.where((dossier) {
-      final nomComplet = "${dossier.prenomAssure} ${dossier.nomAssure}".toLowerCase();
-      final numSecu = dossier.numSecuAssure.toLowerCase();
-      final query = searchQuery.value.toLowerCase();
-      return nomComplet.contains(query) || numSecu.contains(query);
-    }).toList();
-  }
-  // --- FIN DE LA LOGIQUE DE RECHERCHE ---
 
   @override
   void onInit() {
     super.onInit();
     emailUtilisateur.value = _authService.user?.email ?? 'Email non disponible';
     
-    // On lie les streams aux listes sources
-    _dossiersATraiterSource.bindStream(_firestoreService.getDossiersParStatutStream('Soumis'));
-    _dossiersTraitesSource.bindStream(_firestoreService.getDossiersStreamParStatuts(['Traité par Agent', 'Rejeté']));
+    dossiersATraiter.bindStream(_firestoreService.getDossiersParStatutStream('Soumis'));
+    dossiersPourListing.bindStream(_firestoreService.getDossiersParStatutStream('Validé par Directeur'));
+    dossiersSuivi.bindStream(_firestoreService.getDossiersStreamParStatuts(['Traité par Agent', 'Prêt pour paiement', 'Payé', 'Rejeté']));
+    historiqueListings.bindStream(_firestoreService.getListingsStream());
 
-    ever(_dossiersATraiterSource, (_) => isLoading.value = false);
+    ever(dossiersATraiter, (_) => isLoading.value = false);
 
-    // Écoute les changements dans le champ de recherche pour mettre à jour la requête
     searchController.addListener(() {
-      // On met à jour notre variable réactive searchQuery à chaque changement
       searchQuery.value = searchController.text;
     });
   }
 
   @override
   void onClose() {
-    searchController.dispose(); // Important pour la gestion de la mémoire
+    searchController.dispose();
     super.onClose();
   }
 
   void changePage(int index) {
     selectedIndex.value = index;
+    if (isSearching.value) stopSearch();
+    if (index != 1) {
+      selectedForListing.clear();
+    }
+  }
+  
+  void toggleSelection(Dossier dossier) {
+    if (isSelected(dossier)) {
+      selectedForListing.remove(dossier);
+    } else {
+      selectedForListing.add(dossier);
+    }
   }
 
-  void voirDetailsDossier(Dossier dossier) {
-    Get.toNamed('/agent-details-dossier', arguments: dossier);
+  void genererListing() async {
+    if (selectedForListing.isEmpty) { Get.snackbar("Aucune sélection", "Veuillez cocher au moins un dossier."); return; }
+    Get.defaultDialog(
+      title: "Confirmation",
+      middleText: "Voulez-vous vraiment générer un listing et notifier ${selectedForListing.length} bénéficiaires ?",
+      textConfirm: "Oui, Générer", textCancel: "Annuler", confirmTextColor: Colors.white, buttonColor: Colors.green.shade700,
+      onConfirm: () async {
+        Get.back();
+        isProcessingListing.value = true;
+
+        // --- CORRECTION APPLIQUÉE ICI ---
+        final List<String> dossierIds = selectedForListing
+            .where((d) => d.id != null) // Filtre les dossiers sans ID
+            .map((d) => d.id!) // Crée la liste avec des String non-nullables
+            .toList();
+
+        final String agentId = _authService.user!.uid;
+
+        final nouveauListing = Listing(
+          // On n'a plus besoin de passer l'ID ici
+          dateCreation: DateTime.now(),
+          creeParId: agentId,
+          dossierIds: dossierIds,
+        );
+
+        final bool success = await _firestoreService.creerListingNotifierEtMajDossiers(
+          listing: nouveauListing,
+          dossiers: selectedForListing,
+          nouveauStatutDossier: "Prêt pour paiement",
+        );
+
+        isProcessingListing.value = false;
+        if (success) {
+          Get.snackbar("Succès", "Le listing a été créé et les notifications envoyées.", backgroundColor: Colors.green, colorText: Colors.white);
+          selectedForListing.clear();
+        } else {
+          Get.snackbar("Erreur", "La création du listing a échoué. Veuillez réessayer.", backgroundColor: Colors.red, colorText: Colors.white);
+        }
+      }
+    );
   }
 
-  Future<void> seDeconnecter() async {
-    await _authService.logout();
-    Get.offAllNamed('/auth');
+  void voirDetailsDossier(Dossier dossier) { 
+    Get.toNamed(AppPages.agentDetailsDossier, arguments: dossier); 
   }
 
-  // --- MÉTHODES COMPLÈTES POUR GÉRER L'ÉTAT DE LA RECHERCHE ---
-  void startSearch() {
-    isSearching.value = true;
+  void voirDetailsListing(Listing listing) {
+    Get.toNamed(AppPages.listingDetails, arguments: listing);
   }
 
-  void stopSearch() {
-    isSearching.value = false;
-    searchController.clear(); // Efface le texte et déclenche la mise à jour
+  Future<void> seDeconnecter() async { 
+    await _authService.logout(); 
+    Get.offAllNamed(AppPages.auth); 
   }
+  
+  void startSearch() { isSearching.value = true; }
+  void stopSearch() { isSearching.value = false; searchController.clear(); }
 }

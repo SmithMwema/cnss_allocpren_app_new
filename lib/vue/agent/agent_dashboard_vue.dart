@@ -5,34 +5,28 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../controleur/agent_dashboard_ctrl.dart';
 import '../../modele/dossier.dart';
+import '../../modele/listing.dart';
 
 class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
   const AgentDashboardVue({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> pages = [ _buildTraitementPage(controller), _buildHistoriquePage(controller) ];
     return Scaffold(
-      drawer: _buildAgentSideBar(controller),
+      drawer: _buildAgentSideBar(context, controller),
       appBar: AppBar(
-        title: Obx(() {
-          final aTraiterCount = controller.filteredDossiersATraiter.length;
-          final traitesCount = controller.filteredDossiersTraites.length;
-          return controller.isSearching.value
+        title: Obx(() => controller.isSearching.value
             ? TextField(
                 controller: controller.searchController,
                 autofocus: true,
                 decoration: const InputDecoration(
-                  hintText: 'Rechercher par nom ou N° Sécu...',
+                  hintText: 'Rechercher...',
                   hintStyle: TextStyle(color: Colors.white70),
                   border: InputBorder.none,
                 ),
                 style: const TextStyle(color: Colors.white),
               )
-            : Text(controller.selectedIndex.value == 0 
-                ? 'Dossiers à Traiter ($aTraiterCount)' 
-                : 'Historique ($traitesCount)');
-        }),
+            : Text(_getAppBarTitle(controller.selectedIndex.value))),
         backgroundColor: const Color(0xff1b263b),
         actions: [
           Obx(() => controller.isSearching.value
@@ -46,95 +40,187 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
             destinations: [
               NavigationDestination(
                 icon: Badge(
-                  label: Text(controller.filteredDossiersATraiter.length.toString()),
-                  isLabelVisible: controller.filteredDossiersATraiter.isNotEmpty,
+                  // CORRIGÉ : Pointeur vers la liste source
+                  label: Text(controller.dossiersATraiter.length.toString()),
+                  isLabelVisible: controller.dossiersATraiter.isNotEmpty,
                   child: const Icon(Icons.hourglass_top_outlined),
                 ),
                 label: 'À Traiter',
               ),
               NavigationDestination(
                 icon: Badge(
-                  label: Text(controller.filteredDossiersTraites.length.toString()),
-                  isLabelVisible: controller.filteredDossiersTraites.isNotEmpty,
-                  child: const Icon(Icons.history_outlined),
+                  // CORRIGÉ : Pointeur vers la liste source
+                  label: Text(controller.dossiersPourListing.length.toString()),
+                  isLabelVisible: controller.dossiersPourListing.isNotEmpty,
+                  child: const Icon(Icons.playlist_add_outlined),
                 ),
-                label: 'Historique',
+                label: 'Listings',
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.manage_search_outlined),
+                label: 'Suivi Dossiers',
+              ),
+              NavigationDestination(
+                icon: Badge(
+                  // CORRIGÉ : Pointeur vers la liste source
+                  label: Text(controller.historiqueListings.length.toString()),
+                  isLabelVisible: controller.historiqueListings.isNotEmpty,
+                  child: const Icon(Icons.history_edu_outlined),
+                ),
+                label: 'Hist. Listings',
               ),
             ],
           )),
+      floatingActionButton: Obx(() =>
+        (controller.selectedIndex.value == 1 && controller.selectedForListing.isNotEmpty)
+          ? FloatingActionButton.extended(
+              onPressed: controller.genererListing,
+              label: Text("Générer Listing (${controller.selectedForListing.length})"),
+              icon: const Icon(Icons.playlist_add_check_outlined),
+              backgroundColor: Colors.green.shade700,
+            )
+          : const SizedBox.shrink()
+      ),
       body: Obx(() {
-        if (controller.isLoading.value && controller.filteredDossiersATraiter.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
+        if (controller.isLoading.value) { return const Center(child: CircularProgressIndicator()); }
+        if (controller.isProcessingListing.value) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text("Création du listing en cours..."),
+              ],
+            ),
+          );
         }
-        return pages[controller.selectedIndex.value];
+        return _buildCurrentPage(controller);
       }),
     );
   }
-  // ... (toutes les autres méthodes de build comme _buildTraitementPage, _buildAgentSideBar, etc. sont nécessaires ici)
-  Widget _buildTraitementPage(AgentDashboardCtrl ctrl) {
-    return Obx(() {
-      final dossiers = ctrl.filteredDossiersATraiter;
-      if (dossiers.isEmpty) {
-        return _buildEmptyState(
-          ctrl.searchQuery.isNotEmpty ? "Aucun résultat trouvé" : "Aucun nouveau dossier à traiter",
-          ctrl.searchQuery.isNotEmpty ? Icons.search_off : Icons.inbox_outlined,
-        );
-      }
-      return ListView.builder(
-        itemCount: dossiers.length,
-        itemBuilder: (context, index) {
-          final Dossier dossier = dossiers[index];
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: ListTile(
-              leading: const Icon(Icons.folder_open, color: Colors.orange, size: 40),
-              title: Text("${dossier.prenomAssure} ${dossier.nomAssure}", style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text("N° Sécu: ${dossier.numSecuAssure}\nSoumis le: ${DateFormat('dd/MM/yyyy').format(dossier.dateSoumission)}"),
-              isThreeLine: true,
-              trailing: const Icon(Icons.arrow_forward_ios),
-              onTap: () => ctrl.voirDetailsDossier(dossier),
-            ),
-          );
-        },
-      );
-    });
+
+  Widget _buildCurrentPage(AgentDashboardCtrl ctrl) {
+    final List<dynamic> items = ctrl.listeFiltreeAffichee;
+    switch (ctrl.selectedIndex.value) {
+      case 0:
+        return _buildDossiersListPage(dossiers: items.cast<Dossier>(), isSelectable: false);
+      case 1:
+        return _buildDossiersListPage(dossiers: items.cast<Dossier>(), isSelectable: true);
+      case 2:
+        return _buildDossiersListPage(dossiers: items.cast<Dossier>(), isSelectable: false);
+      case 3:
+        return _buildHistoriqueListingsPage(listings: items.cast<Listing>());
+      default:
+        return const Center(child: Text("Page non trouvée."));
+    }
   }
-  Widget _buildHistoriquePage(AgentDashboardCtrl ctrl) {
-    return Obx(() {
-      final dossiers = ctrl.filteredDossiersTraites;
-      if (dossiers.isEmpty) {
-        return _buildEmptyState(
-          ctrl.searchQuery.isNotEmpty ? "Aucun résultat trouvé" : "Aucun dossier dans l'historique",
-          ctrl.searchQuery.isNotEmpty ? Icons.search_off : Icons.history,
-        );
-      }
-      return ListView.builder(
-        itemCount: dossiers.length,
-        itemBuilder: (context, index) {
-          final Dossier dossier = dossiers[index];
-          String dateTraiteeText = "Date de traitement non disponible";
-          if (dossier.dateMiseAJour != null) {
-            dateTraiteeText = "Traité le: ${DateFormat('dd/MM/yyyy').format(dossier.dateMiseAJour!)}";
-          }
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: ListTile(
-              leading: Icon(
-                dossier.statut == 'Rejeté' ? Icons.folder_off_outlined : Icons.folder_shared_outlined,
-                color: dossier.statut == 'Rejeté' ? Colors.red : Colors.green.shade600,
-                size: 40,
-              ),
-              title: Text("${dossier.prenomAssure} ${dossier.nomAssure}"),
-              subtitle: Text("Statut: ${dossier.statut}\n$dateTraiteeText"),
-              isThreeLine: true,
-              onTap: () => ctrl.voirDetailsDossier(dossier),
+
+  Widget _buildHistoriqueListingsPage({ required List<Listing> listings }) {
+    if (listings.isEmpty) {
+      return _buildEmptyState("Aucun listing n'a encore été généré", Icons.history_edu_outlined);
+    }
+    return ListView.builder(
+      itemCount: listings.length,
+      itemBuilder: (context, index) {
+        final Listing listing = listings[index];
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: ListTile(
+            leading: const Icon(Icons.article_outlined, color: Colors.blueGrey, size: 40),
+            title: Text("Listing N° ${listing.id}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            subtitle: Text(
+              "Créé le: ${DateFormat('dd/MM/yyyy').format(listing.dateCreation)}\n"
+              "${listing.dossierIds.length} dossiers - Statut: ${listing.statut}"
             ),
-          );
-        },
-      );
-    });
+            isThreeLine: true,
+            trailing: const Icon(Icons.arrow_forward_ios),
+            onTap: () => controller.voirDetailsListing(listing),
+          ),
+        );
+      },
+    );
   }
-  Widget _buildAgentSideBar(AgentDashboardCtrl ctrl) {
+
+  Widget _buildDossiersListPage({ required List<Dossier> dossiers, required bool isSelectable }) {
+    String emptyMessage;
+    IconData emptyIcon;
+    switch(controller.selectedIndex.value) {
+      case 0: emptyMessage = "Aucun nouveau dossier à traiter"; emptyIcon = Icons.inbox_outlined; break;
+      case 1: emptyMessage = "Aucun dossier validé prêt pour un listing"; emptyIcon = Icons.playlist_add_outlined; break;
+      case 2: emptyMessage = "Aucun dossier dans le suivi"; emptyIcon = Icons.manage_search_outlined; break;
+      default: emptyMessage = ""; emptyIcon = Icons.error;
+    }
+    if (dossiers.isEmpty) {
+      return _buildEmptyState(
+        controller.searchQuery.isNotEmpty ? "Aucun résultat trouvé" : emptyMessage,
+        controller.searchQuery.isNotEmpty ? Icons.search_off : emptyIcon,
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 80), 
+      itemCount: dossiers.length,
+      itemBuilder: (context, index) {
+        final Dossier dossier = dossiers[index];
+        if (isSelectable) {
+          return Obx(() => CheckboxListTile(
+            secondary: Icon(_getStatusIcon(dossier.statut), color: _getStatusColor(dossier.statut), size: 40),
+            title: Text("${dossier.prenomAssure} ${dossier.nomAssure}", style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text("N° Sécu: ${dossier.numSecuAssure}"),
+            value: controller.isSelected(dossier),
+            onChanged: (bool? value) => controller.toggleSelection(dossier),
+          ));
+        }
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: ListTile(
+            leading: Icon(_getStatusIcon(dossier.statut), color: _getStatusColor(dossier.statut), size: 40),
+            title: Text("${dossier.prenomAssure} ${dossier.nomAssure}", style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text("N° Sécu: ${dossier.numSecuAssure}\nStatut: ${dossier.statut}"),
+            isThreeLine: true,
+            trailing: const Icon(Icons.arrow_forward_ios),
+            onTap: () => controller.voirDetailsDossier(dossier),
+          ),
+        );
+      },
+    );
+  }
+  
+  String _getAppBarTitle(int index) {
+    switch (index) {
+      case 0: return 'Dossiers à Traiter';
+      case 1: return 'Création de Listings';
+      case 2: return 'Suivi des Dossiers';
+      case 3: return 'Historique des Listings';
+      default: return 'Espace Agent';
+    }
+  }
+
+  Color _getStatusColor(String statut) {
+    switch (statut) {
+      case 'Soumis': return Colors.orange;
+      case 'Traité par Agent': return Colors.purple;
+      case 'Validé par Directeur': return Colors.blue;
+      case 'Prêt pour paiement': return Colors.teal;
+      case 'Payé': return Colors.green;
+      case 'Rejeté': return Colors.red;
+      default: return Colors.grey;
+    }
+  }
+
+  IconData _getStatusIcon(String statut) {
+    switch (statut) {
+      case 'Soumis': return Icons.folder_open;
+      case 'Traité par Agent': return Icons.assignment_ind_outlined;
+      case 'Validé par Directeur': return Icons.check_circle_outline;
+      case 'Prêt pour paiement': return Icons.playlist_add_check_circle_outlined;
+      case 'Payé': return Icons.paid_outlined;
+      case 'Rejeté': return Icons.folder_off_outlined;
+      default: return Icons.help_outline;
+    }
+  }
+  
+  Widget _buildAgentSideBar(BuildContext context, AgentDashboardCtrl ctrl) {
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
@@ -156,18 +242,25 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
           ListTile(
             leading: const Icon(Icons.palette_outlined),
             title: const Text('Changer de Thème'),
-            onTap: () { Get.back(); _afficherDialogueTheme(Get.context!); },
+            onTap: () {
+              Get.back();
+              _afficherDialogueTheme(context);
+            },
           ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('Se déconnecter'),
-            onTap: () => ctrl.seDeconnecter(),
+            onTap: () {
+              Get.back();
+              ctrl.seDeconnecter();
+            },
           ),
         ],
       ),
     );
   }
+  
   void _afficherDialogueTheme(BuildContext context) {
     showDialog(
       context: context,
@@ -191,6 +284,7 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
       },
     );
   }
+
   Widget _buildEmptyState(String message, IconData icon) {
     return Center(
       child: Column(

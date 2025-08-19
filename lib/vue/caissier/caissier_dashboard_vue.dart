@@ -2,8 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 import '../../controleur/caissier_dashboard_ctrl.dart';
-import '../../modele/dossier.dart'; // Cet import est utilisé à la ligne 56
+import '../../modele/listing.dart';
 
 class CaissierDashboardVue extends StatelessWidget {
   const CaissierDashboardVue({super.key});
@@ -26,7 +27,7 @@ class CaissierDashboardVue extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.only(right: 16.0),
               child: Text(
-                "${ctrl.listeDossiers.length} Dossier(s) à Payer",
+                "${ctrl.listeListings.length} Listing(s)",
                 style: const TextStyle(fontSize: 16),
               ),
             ),
@@ -37,27 +38,29 @@ class CaissierDashboardVue extends StatelessWidget {
         if (ctrl.isLoading.value) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (ctrl.listeDossiers.isEmpty) {
+        if (ctrl.listeListings.isEmpty) {
           return const Center(
-            child: Text("Aucun dossier en attente de paiement."),
+            child: Text("Aucun listing de paiement en attente."),
           );
         }
         return RefreshIndicator(
-          onRefresh: ctrl.chargerDossiers,
+          onRefresh: ctrl.chargerDonnees,
           child: ListView.builder(
-            itemCount: ctrl.listeDossiers.length,
+            itemCount: ctrl.listeListings.length,
             itemBuilder: (context, index) {
-              // LA LIGNE CI-DESSOUS UTILISE LA CLASSE 'Dossier'
-              final dossier = ctrl.listeDossiers[index];
+              final listing = ctrl.listeListings[index];
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: ListTile(
-                  leading: const Icon(Icons.payment, color: Colors.green),
-                  title: Text("${dossier.prenomAssure} ${dossier.nomAssure}"),
-                  subtitle: Text("ID: ${dossier.id}\nValidé par le directeur"),
+                  leading: const Icon(Icons.article_outlined, color: Colors.blue, size: 40),
+                  title: Text("Listing N° ${listing.id}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: Text(
+                    "Créé le: ${DateFormat('dd/MM/yyyy').format(listing.dateCreation)}\n"
+                    "${listing.dossierIds.length} dossiers - Statut: ${listing.statut}"
+                  ),
                   isThreeLine: true,
                   trailing: const Icon(Icons.arrow_forward_ios),
-                  onTap: () => ctrl.confirmerPaiement(dossier),
+                  onTap: () => ctrl.voirDetailsListing(listing),
                 ),
               );
             },
@@ -68,6 +71,7 @@ class CaissierDashboardVue extends StatelessWidget {
   }
 }
 
+// --- CLASSE SIDEBAR COMPLÈTE ET CORRIGÉE ---
 class _SideBarCaissier extends StatelessWidget {
   final String nom;
   final String email;
@@ -92,7 +96,7 @@ class _SideBarCaissier extends StatelessWidget {
               accountEmail: Text(email),
               currentAccountPicture: const CircleAvatar(
                 backgroundColor: Color(0xff00a99d),
-                child: Icon(Icons.admin_panel_settings, size: 40, color: Colors.white),
+                child: Icon(Icons.account_balance_wallet_outlined, size: 40, color: Colors.white),
               ),
               decoration: const BoxDecoration(color: Color(0xff0d1b2a)),
             ),
