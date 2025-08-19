@@ -1,13 +1,13 @@
 // lib/controleur/declaration_ctrl.dart
 
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
-import '../modele/dossier.dart'; // Notre modèle corrigé
+import '../modele/dossier.dart';
 import '../service/auth_service.dart';
 import '../service/firestore_service.dart';
+import '../utilitaire/validateur.dart';
 
 class DeclarationCtrl extends GetxController {
   final FirestoreService _firestore = Get.find<FirestoreService>();
@@ -17,7 +17,7 @@ class DeclarationCtrl extends GetxController {
   final formKeyEtape2 = GlobalKey<FormState>();
   var currentStep = 0.obs;
 
-  // --- Controleurs pour tous les champs ---
+  // --- Controleurs pour TOUS les champs ---
   final nomAssureCtrl = TextEditingController();
   final prenomAssureCtrl = TextEditingController();
   final etatCivilAssureCtrl = TextEditingController();
@@ -29,10 +29,7 @@ class DeclarationCtrl extends GetxController {
   final numAffiliationEmployeurCtrl = TextEditingController();
   final adresseEmployeurCtrl = TextEditingController();
   final nomBeneficiaireCtrl = TextEditingController();
-  
-  // CORRECTION 1 : Renommé le contrôleur pour correspondre au modèle.
   final prenomBeneficiaireCtrl = TextEditingController(); 
-  
   final dateNaissanceBeneficiaireCtrl = TextEditingController();
   final datePrevueAccouchementCtrl = TextEditingController();
   
@@ -48,15 +45,10 @@ class DeclarationCtrl extends GetxController {
     numSecuAssureCtrl.dispose(); adresseAssureCtrl.dispose(); emailAssureCtrl.dispose();
     telAssureCtrl.dispose(); employeurAssureCtrl.dispose(); numAffiliationEmployeurCtrl.dispose();
     adresseEmployeurCtrl.dispose(); nomBeneficiaireCtrl.dispose();
-    
-    // CORRECTION 2 : Nettoyer le contrôleur renommé.
     prenomBeneficiaireCtrl.dispose(); 
-    
     dateNaissanceBeneficiaireCtrl.dispose(); datePrevueAccouchementCtrl.dispose();
     super.onClose();
   }
-
-  // ... (Les fonctions choisirDate... et selectionnerFichier sont inchangées) ...
 
   /// Ouvre le sélecteur de date pour la naissance de la bénéficiaire
   Future<void> choisirDateNaissanceBeneficiaire(BuildContext context) async {
@@ -119,8 +111,6 @@ class DeclarationCtrl extends GetxController {
         userId: _authService.user!.uid,
         dateSoumission: DateTime.now(),
         statut: "Soumis",
-
-        // --- Étape 1 : Assurée ---
         nomAssure: nomAssureCtrl.text.trim(),
         prenomAssure: prenomAssureCtrl.text.trim(),
         etatCivilAssure: etatCivilAssureCtrl.text.trim(),
@@ -131,25 +121,17 @@ class DeclarationCtrl extends GetxController {
         employeurAssure: employeurAssureCtrl.text.trim(),
         numAffiliationEmployeur: numAffiliationEmployeurCtrl.text.trim(),
         adresseEmployeur: adresseEmployeurCtrl.text.trim(),
-
-        // --- Étape 2 : Bénéficiaire (Optionnel) ---
         nomBeneficiaire: nomBeneficiaireCtrl.text.trim().isNotEmpty ? nomBeneficiaireCtrl.text.trim() : null,
-        
-        // CORRECTION 3 : Utiliser le contrôleur et le champ corrects pour correspondre au modèle.
         prenomBeneficiaire: prenomBeneficiaireCtrl.text.trim().isNotEmpty ? prenomBeneficiaireCtrl.text.trim() : null,
-        
         dateNaissanceBeneficiaire: _dateNaissanceBeneficiaire,
-
-        // --- Étape 3 : Médical ---
         datePrevueAccouchement: _dateAccouchement!,
         nomFichierMedical: nomFichierSelectionne.value,
       );
 
-      // Assurez-vous que cette méthode existe dans votre firestore_service
       await _firestore.soumettreNouveauDossier(nouveauDossier);
 
-      Get.back(); // Ferme le dialogue de chargement
-      Get.offAllNamed('/accueil'); // Retourne à l'accueil
+      Get.back();
+      Get.offAllNamed('/accueil');
       Get.snackbar("Succès", "Votre dossier a été soumis avec succès !",
           backgroundColor: Colors.green, colorText: Colors.white);
 
@@ -159,8 +141,6 @@ class DeclarationCtrl extends GetxController {
           backgroundColor: Colors.red, colorText: Colors.white);
     }
   }
-  
-  // ... (onStepContinue et onStepCancel sont inchangés) ...
 
   void onStepContinue() {
     if (currentStep.value == 0) {

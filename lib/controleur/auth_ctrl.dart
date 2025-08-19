@@ -1,3 +1,5 @@
+// lib/controleur/auth_ctrl.dart
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../modele/utilisateur.dart';
@@ -33,59 +35,63 @@ class AuthCtrl extends GetxController {
   }
 
   void checkIfPersonnel() {
-    final email = emailController.text.trim().toLowerCase();
-    isPersonnel.value = personnelEmails.contains(email);
+    isPersonnel.value = personnelEmails.contains(emailController.text.trim().toLowerCase());
   }
 
-  // Appelé par le bouton "Se Connecter"
   void login() async {
     if (loginFormKey.currentState!.validate()) {
       await _performLogin(emailController.text, passwordController.text);
     }
   }
 
-  // Appelé par le bouton "S'inscrire"
+  // --- LOGIQUE D'INSCRIPTION CORRIGÉE ET SIMPLIFIÉE ---
   void register() async {
     if (registerFormKey.currentState!.validate()) {
-      isLoading.value = true; // Démarre le chargement
+      isLoading.value = true;
       try {
-        final success = await _authService.register(nameController.text, emailController.text, passwordController.text);
+        // On appelle la nouvelle méthode robuste du service
+        final success = await _authService.registerUser(
+          nameController.text,
+          emailController.text,
+          passwordController.text,
+        );
+        
+        // Si l'inscription a réussi, Firebase mettra automatiquement l'utilisateur à l'état "connecté".
+        // Notre listener dans AuthService s'occupera de charger les données et de rediriger.
+        // Nous n'avons plus besoin d'appeler _performLogin ici.
+        // La redirection se fera automatiquement via un autre mécanisme (voir le AuthWrapper/Splash screen).
+        
+        // Pour une redirection immédiate si aucun wrapper n'est en place :
         if (success) {
-          // Si l'inscription réussit, on lance la connexion interne
-          await _performLogin(emailController.text, passwordController.text);
-        } else {
-          // Si l'inscription échoue, on arrête le chargement ici
-          isLoading.value = false;
+          await Get.find<AuthService>().appUser.stream.firstWhere((user) => user != null);
+          final Utilisateur? newUser = _authService.appUser.value;
+          if (newUser != null) {
+            _redirectUserByRole(newUser.role);
+          }
         }
-      } catch (e) {
+      } finally {
+        // On s'assure que le chargement s'arrête, quoi qu'il arrive.
         isLoading.value = false;
-        Get.snackbar("Erreur", "Une erreur inattendue est survenue.");
       }
     }
   }
 
-  // Méthode interne qui contient la logique de connexion et de redirection
   Future<void> _performLogin(String email, String password) async {
     isLoading.value = true;
     try {
       final success = await _authService.login(email, password);
       if (success) {
-        // Attend que le rôle soit chargé depuis Firestore
         await Get.find<AuthService>().appUser.stream.firstWhere((user) => user != null);
         final Utilisateur? connectedUser = _authService.appUser.value;
 
         if (connectedUser != null) {
           _redirectUserByRole(connectedUser.role);
         } else {
-          // Si le rôle n'est pas trouvé (très rare), on déconnecte
           await _authService.logout();
           Get.snackbar('Erreur Critique', 'Impossible de récupérer les informations du rôle utilisateur.');
         }
       }
     } finally {
-      // Ce bloc s'exécute toujours, mais si la redirection a lieu, 
-      // l'utilisateur ne verra pas le changement de 'isLoading'.
-      // C'est une sécurité en cas d'échec.
       isLoading.value = false;
     }
   }

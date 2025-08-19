@@ -92,12 +92,19 @@ class AccueilVue extends GetView<AccueilCtrl> {
                   itemBuilder: (context, index) {
                     final dossier = controller.listeDossiers[index];
                     return Card(
+                      elevation: 2,
+                      margin: const EdgeInsets.symmetric(vertical: 6),
                       child: ListTile(
-                        leading: Icon(_getIconForStatus(dossier.statut), color: _getColorForStatus(dossier.statut)),
-                        // --- CORRECTION APPLIQUÉE ICI ---
-                        // On supprime l'appel ".toDate()" car "dateSoumission" est déjà un DateTime.
+                        leading: Icon(_getIconForStatus(dossier.statut), color: _getColorForStatus(dossier.statut), size: 40),
                         title: Text("Dossier soumis le ${DateFormat('dd/MM/yy', 'fr_FR').format(dossier.dateSoumission)}"),
-                        subtitle: Text("Statut: ${dossier.statut}"),
+                        subtitle: Text("Statut: ${dossier.statut}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        
+                        // --- ACTION DE CLIC AJOUTÉE ICI ---
+                        onTap: () {
+                          // On appelle la méthode du contrôleur pour gérer la navigation.
+                          controller.allerVersDetailsDossier(dossier);
+                        },
                       ),
                     );
                   },
@@ -110,15 +117,13 @@ class AccueilVue extends GetView<AccueilCtrl> {
     );
   }
 
-  // ... (Le reste du fichier est identique et ne nécessite aucune modification) ...
-
   Color _getColorForStatus(String statut) {
     switch (statut) {
-      case 'Soumis': return Colors.blue;
-      case 'Traité par Agent': return Colors.purple;
-      case 'Validé par Directeur': return Colors.orange;
-      case 'Payé': return Colors.green;
-      case 'Rejeté': return Colors.red;
+      case 'Soumis': return Colors.blue.shade700;
+      case 'Traité par Agent': return Colors.purple.shade700;
+      case 'Validé par Directeur': return Colors.orange.shade700;
+      case 'Payé': return Colors.green.shade700;
+      case 'Rejeté': return Colors.red.shade700;
       default: return Colors.grey;
     }
   }

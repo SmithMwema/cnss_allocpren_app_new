@@ -1,13 +1,11 @@
+// lib/controleur/admin_add_user_ctrl.dart
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../service/auth_service.dart';
-import '../service/firestore_service.dart';
-
-// --- IMPORT MANQUANT AJOUTÉ ICI ---
 import 'admin_dashboard_ctrl.dart';
 
 class AdminAddUserCtrl extends GetxController {
-  final FirestoreService _firestore = Get.find<FirestoreService>();
   final AuthService _authService = Get.find<AuthService>();
 
   final formKey = GlobalKey<FormState>();
@@ -21,35 +19,46 @@ class AdminAddUserCtrl extends GetxController {
   var selectedRole = 'Sélectionner un rôle'.obs;
 
   Future<void> creerComptePersonnel() async {
-    if (formKey.currentState!.validate()) {
-      isLoading.value = true;
-      try {
-        final userCredential = await _authService.adminCreateUser(
-          emailController.text,
-          passwordController.text,
-          nameController.text,
-        );
+    final isFormValid = formKey.currentState?.validate() ?? false;
+    // CORRECTION : S'assurer que le nom de la chaîne correspond bien à la valeur par défaut
+    final isRoleSelected = selectedRole.value != 'Sélectionner un rôle';
 
-        if (userCredential?.user != null) {
-          await _firestore.createUserDocument(
-            userCredential!.user!.uid,
-            nameController.text,
-            emailController.text,
-            selectedRole.value,
-          );
-          
-          // Cette ligne est maintenant valide car le contrôleur est connu
-          if (Get.isRegistered<AdminDashboardCtrl>()) {
-            Get.find<AdminDashboardCtrl>().chargerToutesLesDonnees();
-          }
+    if (!isFormValid) {
+      Get.snackbar("Erreur", "Veuillez remplir tous les champs correctement.");
+      return;
+    }
+    if (!isRoleSelected) {
+      Get.snackbar("Erreur", "Veuillez sélectionner un rôle pour le nouvel utilisateur.");
+      return;
+    }
 
-          Get.back();
-          Get.snackbar("Succès", "Le compte pour ${nameController.text} a été créé.");
+    isLoading.value = true;
+    try {
+      // --- CORRECTION APPLIQUÉE ICI ---
+      // On appelle la méthode avec les 4 arguments dans le bon ordre.
+      final bool success = await _authService.adminCreateUser(
+        nameController.text,      // 1. name
+        emailController.text,     // 2. email
+        passwordController.text,  // 3. password
+        selectedRole.value,       // 4. role
+      );
+
+      if (success) {
+        // Rafraîchir la liste des utilisateurs dans le tableau de bord de l'admin
+        if (Get.isRegistered<AdminDashboardCtrl>()) {
+          Get.find<AdminDashboardCtrl>().chargerToutesLesDonnees();
         }
-        
-      } finally {
-        isLoading.value = false;
+
+        Get.back(); // Ferme la page d'ajout
+        Get.snackbar("Succès", "Le compte pour ${nameController.text} a été créé.",
+            backgroundColor: Colors.green, colorText: Colors.white);
       }
+      // Si la création échoue, le AuthService affiche déjà le message d'erreur.
+
+    } catch (e) {
+      Get.snackbar("Erreur Inattendue", "Une erreur s'est produite: $e");
+    } finally {
+      isLoading.value = false;
     }
   }
 

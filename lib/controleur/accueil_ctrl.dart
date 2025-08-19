@@ -1,6 +1,9 @@
+// lib/controleur/accueil_ctrl.dart
+
 import 'package:get/get.dart';
 import '../modele/dossier.dart';
 import '../modele/notification.dart';
+import '../modele/utilisateur.dart';
 import '../routes/app_pages.dart';
 import '../service/auth_service.dart';
 import '../service/firestore_service.dart';
@@ -14,64 +17,62 @@ class AccueilCtrl extends GetxController {
   
   final RxList<Dossier> listeDossiers = <Dossier>[].obs;
   var aDesNotificationsNonLues = false.obs;
-  var isLoading = false.obs;
+  var isLoading = true.obs;
 
   @override
   void onInit() {
     super.onInit();
-    ever(_authService.firebaseUser, (user) {
-      if (user != null) {
-        _chargerInfosUtilisateur();
+    
+    ever(_authService.appUser, (Utilisateur? utilisateur) {
+      if (utilisateur != null) {
+        _chargerInfosUtilisateur(utilisateur);
         chargerDonneesAccueil();
       } else {
-        listeDossiers.clear();
-        nomUtilisateur.value = '';
-        emailUtilisateur.value = '';
+        _viderDonneesUtilisateur();
       }
     });
-  }
 
-  void _chargerInfosUtilisateur() {
-    if (_authService.user != null) {
-      nomUtilisateur.value = _authService.user!.displayName ?? 'Utilisateur Inconnu';
-      emailUtilisateur.value = _authService.user!.email ?? 'email@inconnu.com';
+    if (_authService.appUser.value != null) {
+      _chargerInfosUtilisateur(_authService.appUser.value!);
+      chargerDonneesAccueil();
     }
   }
 
-  // --- MÉTHODE MISE À JOUR AVEC DES MESSAGES DE DÉBOGAGE ---
+  void _chargerInfosUtilisateur(Utilisateur utilisateur) {
+    nomUtilisateur.value = utilisateur.nom;
+    emailUtilisateur.value = utilisateur.email;
+  }
+
+  void _viderDonneesUtilisateur() {
+    nomUtilisateur.value = '';
+    emailUtilisateur.value = '';
+    listeDossiers.clear();
+    aDesNotificationsNonLues.value = false;
+  }
+
   Future<void> chargerDonneesAccueil() async {
-    final userId = _authService.user?.uid;
+    isLoading.value = true;
+    
+    final userId = _authService.appUser.value?.uid;
     if (userId == null) {
-      print("CHARGEMENT ANNULÉ : L'UID de l'utilisateur est null.");
-      isLoading.value = false; // Important d'arrêter le chargement ici aussi
+      isLoading.value = false;
       return;
     }
     
-    isLoading.value = true;
-    print("ACCUEIL_CTRL: Début du chargement pour l'UID : $userId");
-    
     try {
-      final resultats = await Future.wait([
-        _firestore.recupererDossiersUtilisateur(userId),
-        _firestore.recupererNotifications(userId),
-      ]);
-
-      final List<Dossier> dossiers = resultats[0] as List<Dossier>;
-      final List<AppNotification> notifications = resultats[1] as List<AppNotification>;
+      final List<Dossier> dossiers = await _firestore.recupererDossiersUtilisateur(userId);
+      final List<AppNotification> notifications = await _firestore.recupererNotifications(userId);
       
-      print("ACCUEIL_CTRL: Requête Firestore terminée.");
-      print("ACCUEIL_CTRL: Nombre de dossiers trouvés : ${dossiers.length}");
-
       listeDossiers.assignAll(dossiers);
       aDesNotificationsNonLues.value = notifications.any((notif) => !notif.estLue);
 
     } catch (e, stackTrace) {
-      Get.snackbar("Erreur Critique", "Impossible de charger les données. Voir la console pour les détails.");
-      print("ERREUR FATALE DANS chargerDonneesAccueil: $e");
+      Get.snackbar("Erreur", "Impossible de charger l'historique des déclarations.");
+      print("ERREUR CRITIQUE DANS chargerDonneesAccueil: $e");
       print(stackTrace);
+      listeDossiers.clear();
     } finally {
       isLoading.value = false;
-      print("ACCUEIL_CTRL: Fin du chargement.");
     }
   }
 
@@ -83,6 +84,15 @@ class AccueilCtrl extends GetxController {
     await Get.toNamed(AppPages.declaration);
     chargerDonneesAccueil();
   }
+
+  // --- NOUVELLE MÉTHODE AJOUTÉE ICI ---
+  /// Navigue vers la page de détails du dossier sélectionné.
+  void allerVersDetailsDossier(Dossier dossier) {
+    // On utilise la nouvelle route que nous avons définie dans app_pages.dart
+    // On passe l'objet 'dossier' complet en argument à la page de détails.
+    Get.toNamed(AppPages.beneficiaireDetailsDossier, arguments: dossier);
+  }
+  // --- FIN DE L'AJOUT ---
 
   Future<void> seDeconnecter() async {
     await _authService.logout();

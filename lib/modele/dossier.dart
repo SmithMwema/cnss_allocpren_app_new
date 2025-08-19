@@ -6,8 +6,7 @@ class Dossier {
   final String? id;
   final String userId;
   String statut;
-
-  // --- Champs de l'étape 1 : Assurée ---
+  // ... (tous vos autres champs)
   final String nomAssure;
   final String prenomAssure;
   final String etatCivilAssure;
@@ -18,17 +17,11 @@ class Dossier {
   final String employeurAssure;
   final String numAffiliationEmployeur;
   final String adresseEmployeur;
-
-  // --- Champs de l'étape 2 : Bénéficiaire (Optionnels) ---
   final String? nomBeneficiaire;
   final String? prenomBeneficiaire; 
   final DateTime? dateNaissanceBeneficiaire;
-
-  // --- Champs de l'étape 3 : Infos Médicales ---
   final DateTime datePrevueAccouchement;
   final String nomFichierMedical;
-
-  // --- Champs de suivi ---
   final DateTime dateSoumission;
   DateTime? dateMiseAJour;
   String? motifRejet;
@@ -59,19 +52,13 @@ class Dossier {
 
   Map<String, dynamic> toFirestore() {
     return {
-      'userId': userId,
-      'statut': statut,
-      'nomAssure': nomAssure,
-      'prenomAssure': prenomAssure,
-      'etatCivilAssure': etatCivilAssure,
-      'numSecuAssure': numSecuAssure,
-      'adresseAssure': adresseAssure,
-      'emailAssure': emailAssure,
-      'telAssure': telAssure,
+      'userId': userId, 'statut': statut, 'nomAssure': nomAssure,
+      'prenomAssure': prenomAssure, 'etatCivilAssure': etatCivilAssure,
+      'numSecuAssure': numSecuAssure, 'adresseAssure': adresseAssure,
+      'emailAssure': emailAssure, 'telAssure': telAssure,
       'employeurAssure': employeurAssure,
       'numAffiliationEmployeur': numAffiliationEmployeur,
-      'adresseEmployeur': adresseEmployeur,
-      'nomBeneficiaire': nomBeneficiaire,
+      'adresseEmployeur': adresseEmployeur, 'nomBeneficiaire': nomBeneficiaire,
       'prenomBeneficiaire': prenomBeneficiaire,
       'dateNaissanceBeneficiaire': dateNaissanceBeneficiaire != null ? Timestamp.fromDate(dateNaissanceBeneficiaire!) : null,
       'datePrevueAccouchement': Timestamp.fromDate(datePrevueAccouchement),
@@ -82,19 +69,27 @@ class Dossier {
     };
   }
 
-  // --- CORRECTION APPLIQUÉE ICI ---
+  // --- VERSION ULTRA-ROBUSTE POUR NE JAMAIS PLANTER ---
   factory Dossier.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     Map<String, dynamic>? data = doc.data();
-    if (data == null) {
-      throw StateError("Le document ${doc.id} est vide ou n'existe pas !");
-    }
-
-    // Fonction d'aide pour convertir les dates de manière sécurisée
+    
+    // Fonction d'aide pour convertir les dates de manière 100% sûre
     DateTime? safeParseDate(dynamic dateData) {
       if (dateData == null) return null;
       if (dateData is Timestamp) return dateData.toDate();
-      if (dateData is DateTime) return dateData; // L'utilise directement si c'est déjà un DateTime
-      return null; // Retourne null si le format est inconnu
+      if (dateData is DateTime) return dateData;
+      return null;
+    }
+    
+    // En cas de document complètement vide, on renvoie un objet "Erreur"
+    if (data == null) {
+      return Dossier(
+          id: doc.id, userId: '', statut: 'Invalide', nomAssure: 'Erreur',
+          prenomAssure: 'Document Vide', etatCivilAssure: '', numSecuAssure: '',
+          adresseAssure: '', emailAssure: '', telAssure: '', employeurAssure: '',
+          numAffiliationEmployeur: '', adresseEmployeur: '',
+          datePrevueAccouchement: DateTime.now(), nomFichierMedical: '',
+          dateSoumission: DateTime.now());
     }
     
     return Dossier(
@@ -113,12 +108,11 @@ class Dossier {
       adresseEmployeur: data['adresseEmployeur'] ?? '',
       nomBeneficiaire: data['nomBeneficiaire'] as String?,
       prenomBeneficiaire: data['prenomBeneficiaire'] as String?,
-      
-      // Utilisation de la fonction d'aide pour toutes les dates
       dateNaissanceBeneficiaire: safeParseDate(data['dateNaissanceBeneficiaire']),
-      datePrevueAccouchement: safeParseDate(data['datePrevueAccouchement']) ?? DateTime.now(), // Valeur par défaut si nulle
+      // On fournit une valeur par défaut si un champ de date OBLIGATOIRE est manquant
+      datePrevueAccouchement: safeParseDate(data['datePrevueAccouchement']) ?? DateTime.now(),
       nomFichierMedical: data['nomFichierMedical'] ?? '',
-      dateSoumission: safeParseDate(data['dateSoumission']) ?? DateTime.now(), // Valeur par défaut si nulle
+      dateSoumission: safeParseDate(data['dateSoumission']) ?? DateTime.now(),
       dateMiseAJour: safeParseDate(data['dateMiseAJour']),
       motifRejet: data['motifRejet'] as String?,
     );

@@ -11,42 +11,33 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
 
   @override
   Widget build(BuildContext context) {
-    // Initialise le contrôleur (nécessaire si non fait par la route)
-    Get.lazyPut(() => AgentDashboardCtrl());
-
-    final List<Widget> pages = [
-      _buildTraitementPage(controller),
-      _buildHistoriquePage(controller),
-    ];
-
+    final List<Widget> pages = [ _buildTraitementPage(controller), _buildHistoriquePage(controller) ];
     return Scaffold(
       drawer: _buildAgentSideBar(controller),
       appBar: AppBar(
-        // La barre de titre change pour afficher la barre de recherche
-        title: Obx(() => controller.isSearching.value
+        title: Obx(() {
+          final aTraiterCount = controller.filteredDossiersATraiter.length;
+          final traitesCount = controller.filteredDossiersTraites.length;
+          return controller.isSearching.value
             ? TextField(
                 controller: controller.searchController,
                 autofocus: true,
                 decoration: const InputDecoration(
-                  hintText: 'Rechercher par nom...',
+                  hintText: 'Rechercher par nom ou N° Sécu...',
                   hintStyle: TextStyle(color: Colors.white70),
                   border: InputBorder.none,
                 ),
                 style: const TextStyle(color: Colors.white),
               )
-            : const Text("Espace Agent PF")),
+            : Text(controller.selectedIndex.value == 0 
+                ? 'Dossiers à Traiter ($aTraiterCount)' 
+                : 'Historique ($traitesCount)');
+        }),
         backgroundColor: const Color(0xff1b263b),
         actions: [
-          // Bouton pour activer/désactiver la recherche
           Obx(() => controller.isSearching.value
-              ? IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: controller.stopSearch,
-                )
-              : IconButton(
-                  icon: const Icon(Icons.search),
-                  onPressed: controller.startSearch,
-                ))
+              ? IconButton(icon: const Icon(Icons.close), onPressed: controller.stopSearch)
+              : IconButton(icon: const Icon(Icons.search), onPressed: controller.startSearch))
         ],
       ),
       bottomNavigationBar: Obx(() => NavigationBar(
@@ -55,16 +46,16 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
             destinations: [
               NavigationDestination(
                 icon: Badge(
-                  label: Text(controller.dossiersATraiter.length.toString()),
-                  isLabelVisible: controller.dossiersATraiter.isNotEmpty,
+                  label: Text(controller.filteredDossiersATraiter.length.toString()),
+                  isLabelVisible: controller.filteredDossiersATraiter.isNotEmpty,
                   child: const Icon(Icons.hourglass_top_outlined),
                 ),
                 label: 'À Traiter',
               ),
               NavigationDestination(
                 icon: Badge(
-                  label: Text(controller.dossiersTraites.length.toString()),
-                  isLabelVisible: controller.dossiersTraites.isNotEmpty,
+                  label: Text(controller.filteredDossiersTraites.length.toString()),
+                  isLabelVisible: controller.filteredDossiersTraites.isNotEmpty,
                   child: const Icon(Icons.history_outlined),
                 ),
                 label: 'Historique',
@@ -72,20 +63,22 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
             ],
           )),
       body: Obx(() {
-        if (controller.isLoading.value && controller.dossiersATraiter.isEmpty) {
+        if (controller.isLoading.value && controller.filteredDossiersATraiter.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }
         return pages[controller.selectedIndex.value];
       }),
     );
   }
-
+  // ... (toutes les autres méthodes de build comme _buildTraitementPage, _buildAgentSideBar, etc. sont nécessaires ici)
   Widget _buildTraitementPage(AgentDashboardCtrl ctrl) {
     return Obx(() {
-      // ON UTILISE LA LISTE FILTRÉE
       final dossiers = ctrl.filteredDossiersATraiter;
       if (dossiers.isEmpty) {
-        return _buildEmptyState("Aucun dossier à traiter", Icons.inbox_outlined);
+        return _buildEmptyState(
+          ctrl.searchQuery.isNotEmpty ? "Aucun résultat trouvé" : "Aucun nouveau dossier à traiter",
+          ctrl.searchQuery.isNotEmpty ? Icons.search_off : Icons.inbox_outlined,
+        );
       }
       return ListView.builder(
         itemCount: dossiers.length,
@@ -96,7 +89,8 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
             child: ListTile(
               leading: const Icon(Icons.folder_open, color: Colors.orange, size: 40),
               title: Text("${dossier.prenomAssure} ${dossier.nomAssure}", style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text("Soumis le: ${DateFormat('dd/MM/yyyy').format(dossier.dateSoumission)}"),
+              subtitle: Text("N° Sécu: ${dossier.numSecuAssure}\nSoumis le: ${DateFormat('dd/MM/yyyy').format(dossier.dateSoumission)}"),
+              isThreeLine: true,
               trailing: const Icon(Icons.arrow_forward_ios),
               onTap: () => ctrl.voirDetailsDossier(dossier),
             ),
@@ -105,13 +99,14 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
       );
     });
   }
-
   Widget _buildHistoriquePage(AgentDashboardCtrl ctrl) {
     return Obx(() {
-      // ON UTILISE LA LISTE FILTRÉE
       final dossiers = ctrl.filteredDossiersTraites;
       if (dossiers.isEmpty) {
-        return _buildEmptyState("Aucun dossier dans l'historique", Icons.history);
+        return _buildEmptyState(
+          ctrl.searchQuery.isNotEmpty ? "Aucun résultat trouvé" : "Aucun dossier dans l'historique",
+          ctrl.searchQuery.isNotEmpty ? Icons.search_off : Icons.history,
+        );
       }
       return ListView.builder(
         itemCount: dossiers.length,
@@ -139,7 +134,6 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
       );
     });
   }
-
   Widget _buildAgentSideBar(AgentDashboardCtrl ctrl) {
     return Drawer(
       child: ListView(
@@ -157,18 +151,12 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
           ListTile(
             leading: const Icon(Icons.notifications_outlined),
             title: const Text('Notifications'),
-            onTap: () {
-              Get.back();
-              Get.toNamed('/notifications');
-            },
+            onTap: () { Get.back(); Get.toNamed('/notifications'); },
           ),
           ListTile(
             leading: const Icon(Icons.palette_outlined),
             title: const Text('Changer de Thème'),
-            onTap: () {
-              Get.back();
-              _afficherDialogueTheme(Get.context!);
-            },
+            onTap: () { Get.back(); _afficherDialogueTheme(Get.context!); },
           ),
           const Divider(),
           ListTile(
@@ -180,7 +168,6 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
       ),
     );
   }
-
   void _afficherDialogueTheme(BuildContext context) {
     showDialog(
       context: context,
@@ -204,7 +191,6 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
       },
     );
   }
-
   Widget _buildEmptyState(String message, IconData icon) {
     return Center(
       child: Column(

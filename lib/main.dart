@@ -1,20 +1,16 @@
-// lib/main.dart
-
-// --- LA CORRECTION EST ICI. CET IMPORT DÉFINIT TOUTES LES FONCTIONS DE BASE DE FLUTTER ---
 import 'package:flutter/material.dart';
-// --------------------------------------------------------------------------------------
-
-import 'package:get/get.dart';
+// LIGNE CORRIGÉE
+import 'package:get/get.dart'; 
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'routes/app_pages.dart';
 import 'service/auth_service.dart';
 import 'service/firestore_service.dart';
 
 Future<void> main() async {
-  // Cette ligne ne causera plus d'erreur car elle est définie dans 'material.dart'
   WidgetsFlutterBinding.ensureInitialized();
   
   await Firebase.initializeApp(
@@ -25,7 +21,6 @@ Future<void> main() async {
   
   initialiserServices();
   
-  // Cette fonction ne causera plus d'erreur
   runApp(const MyApp());
 }
 
@@ -34,16 +29,15 @@ void initialiserServices() {
   Get.put(AuthService(), permanent: true); 
 }
 
-// Les classes StatelessWidget et BuildContext ne causeront plus d'erreur
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      locale: const Locale('fr', 'FR'),
       title: 'CNSS App',
       debugShowCheckedModeBanner: false,
+      
       theme: ThemeData.light().copyWith(
         cardColor: Colors.white,
         dialogBackgroundColor: Colors.grey.shade100,
@@ -61,6 +55,18 @@ class MyApp extends StatelessWidget {
         ),
       ),
       themeMode: ThemeMode.system,
+      
+      locale: const Locale('fr', 'FR'),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('fr', 'FR'),
+        Locale('en', 'US'),
+      ],
+      
       initialRoute: AppPages.lancement,
       getPages: AppPages.routes,
     );
