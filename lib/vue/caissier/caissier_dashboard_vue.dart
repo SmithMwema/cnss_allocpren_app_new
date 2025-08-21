@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../controleur/caissier_dashboard_ctrl.dart';
-import '../../modele/listing.dart';
+import '../../modele/dossier.dart';
 
 class CaissierDashboardVue extends StatelessWidget {
   const CaissierDashboardVue({super.key});
@@ -20,53 +20,92 @@ class CaissierDashboardVue extends StatelessWidget {
         onDeconnexion: ctrl.seDeconnecter,
       )),
       appBar: AppBar(
-        title: const Text("Espace Caissier"),
+        title: Obx(() => Text(ctrl.selectedIndex.value == 0 ? "Dossiers à Payer" : "Historique des Paiements")),
         backgroundColor: const Color(0xff0d1b2a),
-        actions: [
-          Obx(() => Center(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 16.0),
-              child: Text(
-                "${ctrl.listeListings.length} Listing(s)",
-                style: const TextStyle(fontSize: 16),
-              ),
-            ),
-          ))
-        ],
       ),
+      bottomNavigationBar: Obx(() => NavigationBar(
+        selectedIndex: ctrl.selectedIndex.value,
+        onDestinationSelected: ctrl.changePage,
+        destinations: [
+          NavigationDestination(
+            icon: Badge(
+              label: Text(ctrl.dossiersAPayer.length.toString()),
+              isLabelVisible: ctrl.dossiersAPayer.isNotEmpty,
+              child: const Icon(Icons.payment_outlined),
+            ),
+            label: 'À Payer',
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.history_outlined),
+            label: 'Historique',
+          ),
+        ],
+      )),
       body: Obx(() {
         if (ctrl.isLoading.value) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (ctrl.listeListings.isEmpty) {
-          return const Center(
-            child: Text("Aucun listing de paiement en attente."),
-          );
-        }
-        return RefreshIndicator(
-          onRefresh: ctrl.chargerDonnees,
-          child: ListView.builder(
-            itemCount: ctrl.listeListings.length,
-            itemBuilder: (context, index) {
-              final listing = ctrl.listeListings[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: ListTile(
-                  leading: const Icon(Icons.article_outlined, color: Colors.blue, size: 40),
-                  title: Text("Listing N° ${listing.id}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text(
-                    "Créé le: ${DateFormat('dd/MM/yyyy').format(listing.dateCreation)}\n"
-                    "${listing.dossierIds.length} dossiers - Statut: ${listing.statut}"
-                  ),
-                  isThreeLine: true,
-                  trailing: const Icon(Icons.arrow_forward_ios),
-                  onTap: () => ctrl.voirDetailsListing(listing),
-                ),
-              );
-            },
-          ),
+        // Utilise IndexedStack pour conserver l'état de défilement de chaque page
+        return IndexedStack(
+          index: ctrl.selectedIndex.value,
+          children: [
+            _buildAPayerPage(ctrl),
+            _buildHistoriquePage(ctrl),
+          ],
         );
       }),
+    );
+  }
+
+  Widget _buildAPayerPage(CaissierDashboardCtrl ctrl) {
+    if (ctrl.dossiersAPayer.isEmpty) {
+      return const Center(child: Text("Aucun dossier en attente de paiement."));
+    }
+    return RefreshIndicator(
+      onRefresh: ctrl.chargerDonnees,
+      child: ListView.builder(
+        itemCount: ctrl.dossiersAPayer.length,
+        itemBuilder: (context, index) {
+          final dossier = ctrl.dossiersAPayer[index];
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: ListTile(
+              leading: const Icon(Icons.person_outline, color: Colors.blue, size: 40),
+              title: Text("${dossier.prenomAssure} ${dossier.nomAssure}", style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text("N° Sécu: ${dossier.numSecuAssure}"),
+              trailing: ElevatedButton(
+                onPressed: () => ctrl.confirmerPaiement(dossier),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                child: const Text("Payer"),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildHistoriquePage(CaissierDashboardCtrl ctrl) {
+    if (ctrl.historiquePaiements.isEmpty) {
+      return const Center(child: Text("Aucun paiement dans l'historique."));
+    }
+    return ListView.builder(
+      itemCount: ctrl.historiquePaiements.length,
+      itemBuilder: (context, index) {
+        final dossier = ctrl.historiquePaiements[index];
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: ListTile(
+            leading: const Icon(Icons.check_circle_outline, color: Colors.green, size: 40),
+            title: Text("${dossier.prenomAssure} ${dossier.nomAssure}"),
+            subtitle: Text(
+              "N° Sécu: ${dossier.numSecuAssure}\n"
+              "Payé le: ${dossier.dateMiseAJour != null ? DateFormat('dd/MM/yyyy').format(dossier.dateMiseAJour!) : 'N/A'}"
+            ),
+            isThreeLine: true,
+          ),
+        );
+      },
     );
   }
 }

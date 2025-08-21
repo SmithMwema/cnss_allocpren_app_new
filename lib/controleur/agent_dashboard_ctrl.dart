@@ -90,6 +90,7 @@ class AgentDashboardCtrl extends GetxController {
     }
   }
 
+  // --- MÉTHODE CORRIGÉE ---
   void genererListing() async {
     if (selectedForListing.isEmpty) { Get.snackbar("Aucune sélection", "Veuillez cocher au moins un dossier."); return; }
     Get.defaultDialog(
@@ -99,20 +100,19 @@ class AgentDashboardCtrl extends GetxController {
       onConfirm: () async {
         Get.back();
         isProcessingListing.value = true;
-
-        // --- CORRECTION APPLIQUÉE ICI ---
-        final List<String> dossierIds = selectedForListing
-            .where((d) => d.id != null) // Filtre les dossiers sans ID
-            .map((d) => d.id!) // Crée la liste avec des String non-nullables
-            .toList();
-
+        
         final String agentId = _authService.user!.uid;
 
+        // On crée la liste d'objets DossierPaiement selon la nouvelle structure
+        final List<DossierPaiement> dossiersPourLeListing = selectedForListing
+            .where((d) => d.id != null)
+            .map((d) => DossierPaiement(dossierId: d.id!))
+            .toList();
+
         final nouveauListing = Listing(
-          // On n'a plus besoin de passer l'ID ici
           dateCreation: DateTime.now(),
           creeParId: agentId,
-          dossierIds: dossierIds,
+          dossiers: dossiersPourLeListing, // On passe la nouvelle liste structurée
         );
 
         final bool success = await _firestoreService.creerListingNotifierEtMajDossiers(

@@ -32,16 +32,22 @@ class ListingDetailsCtrl extends GetxController {
     }
   }
 
+  // --- MÉTHODE CORRIGÉE ---
   Future<void> _chargerDossiers() async {
     isLoading.value = true;
-    if (listing.value == null || listing.value!.dossierIds.isEmpty) {
+    // On vérifie la nouvelle liste 'dossiers'
+    if (listing.value == null || listing.value!.dossiers.isEmpty) {
       isLoading.value = false;
       return;
     }
     try {
-      // ON UTILISE LA NOUVELLE MÉTHODE EFFICACE
-      final List<Dossier> dossiers = await _firestore.recupererDossiersParIds(listing.value!.dossierIds);
+      // On extrait la liste des IDs depuis la nouvelle structure
+      final List<String> ids = listing.value!.dossiers.map((d) => d.dossierId).toList();
+      
+      // On utilise cette liste d'IDs pour la requête
+      final List<Dossier> dossiers = await _firestore.recupererDossiersParIds(ids);
       dossiersDuListing.assignAll(dossiers);
+
     } catch (e) {
       print("ERREUR CHARGEMENT DETAILS LISTING: $e");
       Get.snackbar("Erreur", "Impossible de charger les détails des dossiers.");

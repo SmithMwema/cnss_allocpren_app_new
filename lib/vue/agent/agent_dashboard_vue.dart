@@ -40,7 +40,6 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
             destinations: [
               NavigationDestination(
                 icon: Badge(
-                  // CORRIGÉ : Pointeur vers la liste source
                   label: Text(controller.dossiersATraiter.length.toString()),
                   isLabelVisible: controller.dossiersATraiter.isNotEmpty,
                   child: const Icon(Icons.hourglass_top_outlined),
@@ -49,7 +48,6 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
               ),
               NavigationDestination(
                 icon: Badge(
-                  // CORRIGÉ : Pointeur vers la liste source
                   label: Text(controller.dossiersPourListing.length.toString()),
                   isLabelVisible: controller.dossiersPourListing.isNotEmpty,
                   child: const Icon(Icons.playlist_add_outlined),
@@ -62,7 +60,6 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
               ),
               NavigationDestination(
                 icon: Badge(
-                  // CORRIGÉ : Pointeur vers la liste source
                   label: Text(controller.historiqueListings.length.toString()),
                   isLabelVisible: controller.historiqueListings.isNotEmpty,
                   child: const Icon(Icons.history_edu_outlined),
@@ -116,6 +113,7 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
     }
   }
 
+  // --- MÉTHODE CORRIGÉE ---
   Widget _buildHistoriqueListingsPage({ required List<Listing> listings }) {
     if (listings.isEmpty) {
       return _buildEmptyState("Aucun listing n'a encore été généré", Icons.history_edu_outlined);
@@ -131,7 +129,8 @@ class AgentDashboardVue extends GetView<AgentDashboardCtrl> {
             title: Text("Listing N° ${listing.id}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
             subtitle: Text(
               "Créé le: ${DateFormat('dd/MM/yyyy').format(listing.dateCreation)}\n"
-              "${listing.dossierIds.length} dossiers - Statut: ${listing.statut}"
+              // ON UTILISE MAINTENANT '.dossiers.length'
+              "${listing.dossiers.length} dossiers - Statut: ${listing.statut}"
             ),
             isThreeLine: true,
             trailing: const Icon(Icons.arrow_forward_ios),

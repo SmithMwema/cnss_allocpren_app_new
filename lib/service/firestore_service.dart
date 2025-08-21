@@ -86,17 +86,13 @@ class FirestoreService {
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => Listing.fromFirestore(doc)).toList());
   }
-  
-  // --- MÉTHODE MODIFIÉE POUR LE TEST ---
   Stream<List<Listing>> getListingsParStatutsStream(List<String> statuts) {
     return _listingsCollection
         .where('statut', whereIn: statuts)
-        // La ligne de tri est temporairement désactivée
-        // .orderBy('dateCreation', descending: true)
+        .orderBy('dateCreation', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => Listing.fromFirestore(doc)).toList());
   }
-  
   Future<bool> creerListingNotifierEtMajDossiers({
     required Listing listing,
     required List<Dossier> dossiers,
@@ -122,6 +118,51 @@ class FirestoreService {
       return true;
     } catch (e) {
       print("ERREUR LORS DE LA CRÉATION DU LISTING: $e");
+      return false;
+    }
+  }
+
+  // MÉTHODE MANQUANTE AJOUTÉE ICI
+  Future<bool> payerDossierDansListing({
+    required String listingId,
+    required Dossier dossierPaye,
+  }) async {
+    try {
+      await _db.runTransaction((transaction) async {
+        final listingRef = _listingsCollection.doc(listingId);
+        
+        final listingSnapshot = await transaction.get(listingRef);
+        if (!listingSnapshot.exists) {
+          throw Exception("Listing non trouvé !");
+        }
+        final listing = Listing.fromFirestore(listingSnapshot as DocumentSnapshot<Map<String, dynamic>>);
+
+        final indexDossier = listing.dossiers.indexWhere((d) => d.dossierId == dossierPaye.id);
+        if (indexDossier != -1) {
+          listing.dossiers[indexDossier].statutPaiement = 'Payé';
+        }
+
+        final tousPayes = listing.dossiers.every((d) => d.statutPaiement == 'Payé');
+        listing.statut = tousPayes ? 'Payé' : 'Partiellement Payé';
+
+        transaction.update(listingRef, {'dossiers': listing.dossiers.map((d) => d.toMap()).toList(), 'statut': listing.statut});
+        
+        final dossierRef = _dossiersCollection.doc(dossierPaye.id!);
+        transaction.update(dossierRef, {'statut': 'Payé', 'dateMiseAJour': FieldValue.serverTimestamp()});
+
+        final notificationRef = _notificationsCollection.doc();
+        final notification = AppNotification(
+          userId: dossierPaye.userId,
+          titre: 'Paiement effectué',
+          message: 'Bonne nouvelle ! Le paiement de votre allocation a été effectué. Le processus est maintenant terminé.',
+          dateCreation: DateTime.now(),
+          dossierId: dossierPaye.id!,
+        );
+        transaction.set(notificationRef, notification.toFirestore());
+      });
+      return true;
+    } catch (e) {
+      print("ERREUR LORS DU PAIEMENT DU DOSSIER: $e");
       return false;
     }
   }
